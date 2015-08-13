@@ -4,7 +4,7 @@
   "description": "A simple static heatmap generator for Node JS and Mapbox.",
   "main": "map.js",
   "author": "Simon Elvery",
-  "license": "None",
+  "license": "BSD",
   "dependencies": {
     "canvas": "^1.2.7",
     "request": "^2.60.0"
