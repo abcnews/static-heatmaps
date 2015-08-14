@@ -1,12 +1,13 @@
 {
   "name": "static-heatmaps",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A simple static heatmap generator for Node JS and Mapbox.",
   "main": "map.js",
   "author": "Simon Elvery",
   "license": "BSD",
   "dependencies": {
     "canvas": "^1.2.7",
+    "promise": "^7.0.4",
     "request": "^2.60.0"
   }
 }

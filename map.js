@@ -1,9 +1,10 @@
-var Canvas, Image, request, simpleHeat;
+var Canvas, Image, request, simpleHeat, Promise;
 
 Canvas = require('canvas');
 Image = Canvas.Image;
 simpleHeat = require('./simpleheat');
 request = require('request');
+Promise = require('promise');
 
 module.exports = function() {
 	var map, cache,
@@ -50,51 +51,57 @@ module.exports = function() {
 	};
 
 	map.render = function(data, cb) {
-
-		if (cache[coordinates.concat(size).join(',')]) {
-			addOverlay(cache[coordinates.concat(size).join(',')],data,cb);
-		} else {
-			getMapCanvas(function(canvas){
-				cache[coordinates.concat(size).join(',')] = canvas;
-				addOverlay(canvas,data,cb);
-			});
-		}
-
+		getMapCanvas(function(err, img){
+			addOverlay(img,data,cb);
+		});
 	};
 
 	return map;
 
 	function getMapCanvas(cb){
-		request({
-			url: strReplace('https://api.mapbox.com/v4/{mapid}/{lon},{lat},{z}/{width}x{height}.{format}?access_token={token}', {
-				mapid: mapid,
-				lat: coordinates[0],
-				lon: coordinates[1],
-				z: coordinates[2] || 19,
-				width: size[0],
-				height: size[1],
-				format: 'png',
-				token: token
-			}),
-			encoding: null
-		}, function(err, res, data){
 
-			var canvas, ctx, img;
+		var url;
 
-			img = new Image();
-			img.src = data;
-			canvas = new Canvas(size[0], size[1]);
-			ctx = canvas.getContext('2d');
-			ctx.drawImage(img, 0, 0);
-			cb(canvas);
+		url = strReplace('https://api.mapbox.com/v4/{mapid}/{lon},{lat},{z}/{width}x{height}.{format}?access_token={token}', {
+			mapid: mapid,
+			lat: coordinates[0],
+			lon: coordinates[1],
+			z: coordinates[2] || 19,
+			width: size[0],
+			height: size[1],
+			format: 'png',
+			token: token
 		});
+
+		cache[url] = cache[url] || new Promise(function (resolve, reject) {
+			request({
+				url: url,
+				encoding: null
+			}, function (err, res, data) {
+
+				var canvas, ctx, img;
+
+				if (err) {
+					reject(err);
+				}
+
+				img = new Image();
+				img.src = data;
+
+				resolve(img);
+			});
+		});
+
+		cache[url].nodeify(cb);
 	}
 
-	function addOverlay(mapCanvas, data, cb) {
+	function addOverlay(img, data, cb) {
 
-		var mapCtx, heatCanvas, heatCtx, heat;
+		var canvas, ctx, heatCanvas, heatCtx, heat;
 
-		mapCtx = mapCanvas.getContext('2d');
+		canvas = new Canvas(size[0], size[1]);
+		ctx = canvas.getContext('2d');
+		ctx.drawImage(img, 0, 0);
 
 		heatCanvas = new Canvas(size[0], size[1]);
 		heatCtx = heatCanvas.getContext('2d');
@@ -105,17 +112,16 @@ module.exports = function() {
 				point = latLngToPoint(d[0],d[1],coordinates[2]);
 			return [point[0]-origin[0],point[1]-origin[1]];
 		});
-		console.log(data.length);
+
 		heat.data(data);
 		heat.radius(radius[0], radius[1]);
 		heat.draw();
 
-		mapCtx.globalAlpha = alpha;
-		mapCtx.drawImage(heatCanvas, 0, 0);
+		ctx.globalAlpha = alpha;
+		ctx.drawImage(heatCanvas, 0, 0);
 
-		cb(mapCanvas);
+		cb(canvas);
 	}
-
 };
 
 
