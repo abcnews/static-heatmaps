@@ -52,7 +52,11 @@ module.exports = function() {
 
 	map.render = function(data, cb) {
 		getMapCanvas(function(err, img){
-			addOverlay(img,data,cb);
+			if (err) {
+				cb(err);
+			} else {
+				addOverlay(img,data,cb);
+			}
 		});
 	};
 
@@ -120,7 +124,7 @@ module.exports = function() {
 		ctx.globalAlpha = alpha;
 		ctx.drawImage(heatCanvas, 0, 0);
 
-		cb(canvas);
+		cb(null, canvas);
 	}
 };
 
