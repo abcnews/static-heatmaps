@@ -103,9 +103,12 @@ module.exports = function() {
 
 	function addOverlay(img, data, cb) {
 
-		var canvas, ctx, heatCanvas, heatCtx, heat, xys;
+		var canvas, ctx, heatCanvas, heatCtx, heat, xys, centre, lookup, weight;
 
 		canvas = new Canvas(size[0], size[1]);
+		weight = 1 / Math.pow(2, Math.max(0, Math.min(18 - coordinates[2], 12)));
+		centre = centre = sm.px([coordinates[1],coordinates[0]],coordinates[2]);
+
 
 		ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0);
@@ -115,17 +118,29 @@ module.exports = function() {
 		heat = simpleHeat(heatCanvas);
 
 		xys = data.map(function(d){
-
 			var center, origin, point;
-
-			centre = sm.px([coordinates[1],coordinates[0]],coordinates[2]);
+			return sm.px([d[1],d[0]],coordinates[2]);
+		}).filter(function(d){
+			return true;
+			// return inPxBounds(d, bounds);
+		}).map(function(d){
+			var origin;
 			origin = [centre[0]-size[0]/2,centre[1]-size[1]/2];
-			point = sm.px([d[1],d[0]],coordinates[2]);
-			return [point[0]-origin[0],point[1]-origin[1]];
+			return [d[0]-origin[0],d[1]-origin[1]];
+		}).reduce(function(t, d){
+			var ref = d.join('x');
+			lookup = lookup || {};
+			if (!lookup[ref]) {
+				lookup[ref] = d.concat([weight]);
+				t.push(lookup[ref]);
+			} else {
+				lookup[ref][2] += weight;
+			}
+			return t;
+		}, []);
 
-		});
 
-		heat.data(data);
+		heat.data(xys);
 		heat.radius(radius[0], radius[1]);
 		heat.draw();
 
