@@ -5,9 +5,10 @@ Image = Canvas.Image;
 simpleHeat = require('./simpleheat');
 request = require('request');
 Promise = require('promise');
+SphericalMercator = require('sphericalmercator');
 
 module.exports = function() {
-	var map, cache,
+	var map, cache, sm,
 	 	coordinates, size, mapid, token, alpha, radius;
 
 	map = {};
@@ -51,6 +52,7 @@ module.exports = function() {
 	};
 
 	map.render = function(data, cb) {
+		sm = new SphericalMercator();
 		getMapCanvas(function(err, img){
 			if (err) {
 				cb(err);
@@ -101,20 +103,26 @@ module.exports = function() {
 
 	function addOverlay(img, data, cb) {
 
-		var canvas, ctx, heatCanvas, heatCtx, heat;
+		var canvas, ctx, heatCanvas, heatCtx, heat, xys;
 
 		canvas = new Canvas(size[0], size[1]);
+
 		ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0);
 
 		heatCanvas = new Canvas(size[0], size[1]);
 		heatCtx = heatCanvas.getContext('2d');
 		heat = simpleHeat(heatCanvas);
-		data = data.map(function(d){
-			var centre = latLngToPoint(coordinates[0],coordinates[1],coordinates[2]),
-				origin = [centre[0]-size[0]/2,centre[1]-size[1]/2],
-				point = latLngToPoint(d[0],d[1],coordinates[2]);
+
+		xys = data.map(function(d){
+
+			var center, origin, point;
+
+			centre = sm.px([coordinates[1],coordinates[0]],coordinates[2]);
+			origin = [centre[0]-size[0]/2,centre[1]-size[1]/2];
+			point = sm.px([d[1],d[0]],coordinates[2]);
 			return [point[0]-origin[0],point[1]-origin[1]];
+
 		});
 
 		heat.data(data);
@@ -129,32 +137,11 @@ module.exports = function() {
 };
 
 
+// A really cheap and dirty string templating funciton.
 function strReplace(str, replacements) {
 	var key;
 	for (key in replacements) {
 		str = str.replace('{'+key+'}',replacements[key]);
 	}
 	return str;
-}
-
-function sphericalMercator(lat, lng) {
-	var R = 6378137,
-		d = Math.PI / 180,
-	    max = 1 - 1E-15,
-	    sin = Math.max(Math.min(Math.sin(lat * d), max), -max);
-
-	return [R * lng * d, R * Math.log((1 + sin) / (1 - sin)) / 2];
-}
-
-function latLngToPoint(lat, lng, zoom) {
-	var projected = sphericalMercator(lat, lng),
-		scale = 256 * Math.pow(2, zoom);
-	return transformation(projected, scale);
-}
-
-function transformation(point, scale) {
-	var mercatorScale = 0.5 / (Math.PI * 6378137);
-	point[0] = scale * (mercatorScale * point[0] + 0.5);
-	point[1] = scale * (-mercatorScale * point[1] + 0.5);
-	return point;
 }

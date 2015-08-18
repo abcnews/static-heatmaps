@@ -8,6 +8,7 @@
   "dependencies": {
     "canvas": "^1.2.7",
     "promise": "^7.0.4",
-    "request": "^2.60.0"
+    "request": "^2.60.0",
+    "sphericalmercator": "^1.0.3"
   }
 }
