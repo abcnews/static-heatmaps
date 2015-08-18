@@ -81,13 +81,6 @@ module.exports = function() {
 		return [sm.ll(nwpx,zoom).reverse(),sm.ll(sepx,zoom).reverse()];
 	}
 
-	// function pxBounds() {
-	// 	var c, nw, se, buffer;
-	// 	buffer = size[0]+size[1];
-	// 	c = sm.px([coordinates[1],coordinates[0]],coordinates[2]);
-	// 	return [[c[0]-size[0]/2-buffer,c[1]-size[1]/2-buffer],[c[0]+size[0]/2+buffer,c[1]+size[1]/2+buffer]];
-	// }
-
 	function getMapCanvas(cb){
 
 		var url;
