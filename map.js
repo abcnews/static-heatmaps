@@ -129,122 +129,118 @@ module.exports = function() {
 
 		var canvas, ctx, heatCanvas, heatCtx, heat, xys, centre, lookup, weight;
 
+		// Main canvas
 		canvas = new Canvas(size[0], size[1]);
-		centre = centre = sm.px([coordinates[1],coordinates[0]],coordinates[2]);
-		weight = 1 / Math.pow(2, Math.max(0, Math.min(18 - coordinates[2], 12)));
-
 		ctx = canvas.getContext('2d');
 		ctx.drawImage(img, 0, 0);
 
+		// Heat canvas
 		heatCanvas = new Canvas(size[0], size[1]);
 		heatCtx = heatCanvas.getContext('2d');
 		heat = simpleHeat(heatCanvas);
 
-		// xys = data.map(function(d){
-		// 	var center, origin, point;
-		// 	return sm.px([d[1],d[0]],coordinates[2]);
-		// }).filter(function(d){
-		// 	return inPxBounds(d, bounds);
-		// }).map(function(d){
-		// 	var origin;
-		// 	origin = [centre[0]-size[0]/2,centre[1]-size[1]/2];
-		// 	return [d[0]-origin[0],d[1]-origin[1]];
-		// });
-		// console.log(xys.length);
-		// .reduce(function(t, d){
-		// 	var ref = d.join('x');
-		// 	lookup = lookup || {};
-		// 	if (!lookup[ref]) {
-		// 		lookup[ref] = d.concat([weight]);
-		// 		t.push(lookup[ref]);
-		// 	} else {
-		// 		lookup[ref][2] += weight;
-		// 	}
-		// 	return t;
-		// }, []);
-
-		// var max = xys.reduce(function(t,d){
-		// 	return Math.max(t,d[2]);
-		// },0);
-
-		// console.log(max);
-		xys = _redraw(data);
-		// console.log(xys);
-
-		heat.data(xys);
-		// heat.max(max);
+		// Draw heat canvas
+		heat.data(transform(data));
 		heat.radius(radius[0], radius[1]);
 		heat.draw();
-
+		// transform(data);
+		// Merge heat canvas with main canvas
 		ctx.globalAlpha = alpha;
 		ctx.drawImage(heatCanvas, 0, 0);
 
+		// Callback
 		cb(null, canvas);
 	}
 
+	function transform(data){
+		var out,
+			zoom, centre, origin, nw, se,
+			r, bounds, max, maxZoom, v, cellSize, grid, panePos, offsetX, offsetY,
+			i, len, p, cell, x, y, j, len2, k;
 
-	function _redraw(input) {
+		out = [];
+		r = radius[0]+radius[1];
+		zoom = coordinates[2];
+		centre = sm.px([coordinates[1],coordinates[0]], zoom);
+		origin = [centre[0]-size[0]/2, centre[1]-size[1]/2];
+		sw = sm.ll([centre[0]-size[0]/2-r,centre[1]+size[1]/2+r],zoom).reverse();
+		ne = sm.ll([centre[0]+size[0]/2+r,centre[1]-size[1]/2-r],zoom).reverse();
+		bounds = {ne:ne, sw:sw};
+		max = 1;
+		maxZoom = 18;
+		v = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - zoom, 12)));
+		cellSize = r/2;
+		grid = [];
+		panePos = {x:0,y:0};
+		offsetX = panePos.x % cellSize;
+		offsetY = panePos.y % cellSize;
 
-        var data = [],
-            r = radius[0]+radius[1],
-            // size = this._map.getSize(),
+		// console.log(r, size, bounds, max, maxZoom, v, cellSize, grid, panePos, offsetX, offsetY);
+		var cnt = 0;
+		// console.time('process');
+		for (i = 0, len = data.length; i < len; i++) {
+			if (inBounds(data[i], bounds)) {
+				cnt++;
+				p = sm.px([data[i][1],data[i][0]],zoom);
+				p = {x: p[0]-origin[0], y: p[1]-origin[1]};
+				x = Math.floor((p.x - offsetX) / cellSize) + 2;
+				y = Math.floor((p.y - offsetY) / cellSize) + 2;
 
+				var alt = 1;
+				k = alt * v;
 
-            // max = this.options.max === undefined ? 1 : this.options.max,
-            maxZoom = 18,
-            v = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - coordinates[2], 12))),
-            cellSize = r / 2,
-            grid = [],
-            panePos = {x:0,y:0},
-            offsetX = panePos.x % cellSize,
-            offsetY = panePos.y % cellSize,
-            i, len, p, cell, x, y, j, len2, k;
+				grid[y] = grid[y] || [];
+				cell = grid[y][x];
 
-        // console.time('process');
-        for (i = 0, len = input.length; i < len; i++) {
+				if (!cell) {
+					grid[y][x] = [p.x, p.y, k];
 
-            if (inBounds(input[i],bounds)) {
+				} else {
+					cell[0] = (cell[0] * cell[2] + p.x * k) / (cell[2] + k); // x
+					cell[1] = (cell[1] * cell[2] + p.y * k) / (cell[2] + k); // y
+					cell[2] += k; // cumulated intensity value
+				}
+			}
+		}
 
-                p = sm.px(input[i].reverse(),coordinates[2]);
-				p = {x:p[0],y:p[1]};
-                x = Math.floor((p.x - offsetX) / cellSize) + 2;
-                y = Math.floor((p.y - offsetY) / cellSize) + 2;
+		for (i = 0, len = grid.length; i < len; i++) {
+			if (grid[i]) {
+				for (j = 0, len2 = grid[i].length; j < len2; j++) {
+					cell = grid[i][j];
+					if (cell) {
+						out.push([
+							Math.round(cell[0]),
+							Math.round(cell[1]),
+							Math.min(cell[2], max)
+						]);
+					}
+				}
+			}
+		}
 
-                var alt = 1;
-                k = alt * v;
+		return out;
 
-                grid[y] = grid[y] || [];
-                cell = grid[y][x];
+	}
 
-                if (!cell) {
-                    grid[y][x] = [p.x, p.y, k];
-                } else {
-                    cell[0] = (cell[0] * cell[2] + p.x * k) / (cell[2] + k); // x
-                    cell[1] = (cell[1] * cell[2] + p.y * k) / (cell[2] + k); // y
-                    cell[2] += k; // cumulated intensity value
-                }
-            }
-        }
+	function inBounds(ll, bounds) {
 
+		// Outside latitude?
+		if (ll[0] > bounds.ne[0] || ll[0] < bounds.sw[0]) {
+			return false;
+		}
 
+		// Outside longitude & no date-line cross
+		if (bounds.ne[1] >= bounds.sw[1] && (ll[1] > bounds.ne[1] || ll[1] < bounds.sw[1])) {
+			return false;
+		}
 
-		   for (i = 0, len = grid.length; i < len; i++) {
-			   if (grid[i]) {
-				   for (j = 0, len2 = grid[i].length; j < len2; j++) {
-					   cell = grid[i][j];
-					   if (cell) {
-						   data.push([
-							   Math.round(cell[0]),
-							   Math.round(cell[1]),
-							   Math.min(cell[2], 1)
-						   ]);
-					   }
-				   }
-			   }
-		   }
-		//    console.log(data.length);
-		   return data;
-	   }
+		// Outside longitude with dateline cross
+		if (bounds.ne[1] < bounds.sw[1] && (ll[1] <= bounds.ne[1] || ll[1] >= bounds.sw[1])) {
+			return false;
+		}
+
+		return true;
+	}
 };
 
 function inPxBounds(xy, bbox) {
@@ -258,6 +254,7 @@ function inBounds(ll, bbox) {
 		ll[1]+180 >= bbox[0][1]+180 &&
 		ll[1]+180 <= bbox[1][1]+180;
 }
+
 
 // A really cheap and dirty string templating funciton.
 function strReplace(str, replacements) {
