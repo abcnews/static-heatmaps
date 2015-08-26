@@ -1,4 +1,4 @@
-var Canvas, Image, request, simpleHeat, Promise;
+var Canvas, Image, request, simpleHeat, Promise, cache;
 
 Canvas = require('canvas');
 Image = Canvas.Image;
@@ -7,12 +7,13 @@ request = require('request');
 Promise = require('promise');
 SphericalMercator = require('sphericalmercator');
 
+cache = {};
+
 module.exports = function() {
-	var map, cache, sm,
-	 	coordinates, size, mapid, token, alpha, radius;
+	var map, sm,
+	 	coordinates, size, mapid, token, alpha, radius, bounds;
 
 	map = {};
-	cache = {};
 	radius = [6,12];
 
 	map.coordinates = function(_) {
@@ -152,7 +153,7 @@ module.exports = function() {
 };
 
 
-// A really cheap and dirty string templating funciton.
+// A really cheap and dirty string templating function.
 function strReplace(str, replacements) {
 	var key;
 	for (key in replacements) {
