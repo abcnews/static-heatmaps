@@ -7,16 +7,17 @@ request = require('request');
 Promise = require('promise');
 SphericalMercator = require('sphericalmercator');
 
+// Some things which can be shared between instances.
+sm = new SphericalMercator();
+cache = {};
+
 module.exports = function() {
-	var map, cache, sm,
-	 	coordinates, size, mapid, token, alpha, radius, bounds;
+	var map, coordinates, size, mapid, token, alpha, radius, bounds;
 
 	map = {};
-	cache = {};
 	radius = [6,12];
 	size = [400,400];
 	coordinates = [0,0,0];
-	sm = new SphericalMercator();
 	bounds = getBounds();
 
 	map.coordinates = function(_) {
@@ -77,7 +78,7 @@ module.exports = function() {
 
 		nwpx = [centre[0]-size[0]/2,centre[0]-size[1]/2];
 		sepx = [centre[1]+size[1]/2,centre[1]+size[1]/2];
-		console.log([sm.ll(nwpx,zoom).reverse(),sm.ll(sepx,zoom).reverse()]);
+		// console.log([sm.ll(nwpx,zoom).reverse(),sm.ll(sepx,zoom).reverse()]);
 		return [sm.ll(nwpx,zoom).reverse(),sm.ll(sepx,zoom).reverse()];
 	}
 
@@ -136,7 +137,7 @@ module.exports = function() {
 		heat.data(transform(data));
 		heat.radius(radius[0], radius[1]);
 		heat.draw();
-		// transform(data);
+
 		// Merge heat canvas with main canvas
 		ctx.globalAlpha = alpha;
 		ctx.drawImage(heatCanvas, 0, 0);
@@ -145,56 +146,80 @@ module.exports = function() {
 		cb(null, canvas);
 	}
 
+
 	function transform(data){
-		var out,
-			zoom, centre, origin, nw, se,
-			r, bounds, max, maxZoom, v, cellSize, grid, panePos, offsetX, offsetY,
+		var out, weight,
+			zoom, centre, origin, bounds,
+			r, max, maxZoom, v, cellSize, grid, panePos, offsetX, offsetY,
 			i, len, p, cell, x, y, j, len2, k;
 
+		// The result
 		out = [];
+
+		// The total radius for each heat spot
 		r = radius[0]+radius[1];
+
+		// The zoom level of the current map
 		zoom = coordinates[2];
+
+		// The centre point of the map in pixels
 		centre = sm.px([coordinates[1],coordinates[0]], zoom);
+
+		// The [0,0] (top left) coordinates of the requested map in pixels of the total world
 		origin = [centre[0]-size[0]/2, centre[1]-size[1]/2];
-		sw = sm.ll([centre[0]-size[0]/2-r,centre[1]+size[1]/2+r],zoom).reverse();
-		ne = sm.ll([centre[0]+size[0]/2+r,centre[1]-size[1]/2-r],zoom).reverse();
-		bounds = {ne:ne, sw:sw};
+
+		// The lat/lon bounds of the output image + heat radius
+		bounds = {
+			ne: sm.ll([centre[0]+size[0]/2+r,centre[1]-size[1]/2-r],zoom).reverse(),
+			sw: sm.ll([centre[0]-size[0]/2-r,centre[1]+size[1]/2+r],zoom).reverse()
+		};
+
 		max = 1;
-		maxZoom = 18;
+		maxZoom = 10;
 		v = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - zoom, 12)));
+
+		console.log(maxZoom, zoom, v);
+
+		weight=1;
+
 		cellSize = r/2;
 		grid = [];
 		panePos = {x:0,y:0};
 		offsetX = panePos.x % cellSize;
 		offsetY = panePos.y % cellSize;
 
-		// console.log(r, size, bounds, max, maxZoom, v, cellSize, grid, panePos, offsetX, offsetY);
-		var cnt = 0;
-		// console.time('process');
-		for (i = 0, len = data.length; i < len; i++) {
-			if (inBounds(data[i], bounds)) {
-				cnt++;
-				p = sm.px([data[i][1],data[i][0]],zoom);
-				p = {x: p[0]-origin[0], y: p[1]-origin[1]};
-				x = Math.floor((p.x - offsetX) / cellSize) + 2;
-				y = Math.floor((p.y - offsetY) / cellSize) + 2;
+		grid = data.filter(function(ll){
+			return inBounds(ll,bounds);
+		}).reduce(function(grid, ll){
+			var globalPosition, localPosition, ref, weight;
 
-				var alt = 1;
-				k = alt * v;
+			globalPosition = sm.px([ll[1],ll[0]],zoom);
 
-				grid[y] = grid[y] || [];
-				cell = grid[y][x];
+			localPosition = {};
+			localPosition.x = globalPosition[0]-origin[0];
+			localPosition.y = globalPosition[1]-origin[1];
 
-				if (!cell) {
-					grid[y][x] = [p.x, p.y, k];
+			ref = {};
+			ref.x = Math.floor((localPosition.x - offsetX) / cellSize) + 2;
+			ref.y = Math.floor((localPosition.y - offsetY) / cellSize) + 2;
 
-				} else {
-					cell[0] = (cell[0] * cell[2] + p.x * k) / (cell[2] + k); // x
-					cell[1] = (cell[1] * cell[2] + p.y * k) / (cell[2] + k); // y
-					cell[2] += k; // cumulated intensity value
-				}
+			grid[ref.y] = grid[ref.y] || [];
+			cell = grid[ref.y][ref.x];
+
+			if (cell) {
+				// Reposition the center of this point within the grid.
+				cell[0] = (cell[0] * cell[2] + localPosition.x * weight) / (cell[2] + weight); // x
+				cell[1] = (cell[1] * cell[2] + localPosition.y * weight) / (cell[2] + weight); // y
+
+				// Add to the accumulated intensity
+				cell[2] += weight;
+			} else {
+				grid[ref.y][ref.x] = [localPosition.x, localPosition.y, weight];
 			}
-		}
+
+			return grid;
+
+		}, []);
 
 		for (i = 0, len = grid.length; i < len; i++) {
 			if (grid[i]) {
@@ -212,7 +237,6 @@ module.exports = function() {
 		}
 
 		return out;
-
 	}
 
 	function inBounds(ll, bounds) {
