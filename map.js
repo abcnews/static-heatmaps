@@ -175,12 +175,12 @@ module.exports = function() {
 		};
 
 		max = 1;
-		maxZoom = 10;
-		v = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - zoom, 12)));
+		maxZoom = 18;
+		weight = 1 / Math.pow(2, Math.max(0, Math.min(maxZoom - zoom, 12)));
 
-		console.log(maxZoom, zoom, v);
+		console.log(maxZoom, zoom, weight);
 
-		weight=1;
+		// weight=1;
 
 		cellSize = r/2;
 		grid = [];
